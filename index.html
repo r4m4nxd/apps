@@ -2609,7 +2609,7 @@ function buildWaterGrid(){
       // empty: render a clean outline circle in the button
       b.innerHTML=`<svg viewBox="0 0 24 24" width="22" height="22" xmlns="http://www.w3.org/2000/svg"><path d="M12 3C12 3 6 11 6 15.5C6 18.98 8.69 22 12 22C15.31 22 18 18.98 18 15.5C18 11 12 3 12 3Z" fill="none" stroke="#4a5570" stroke-width="1.8" stroke-linejoin="round"/></svg>`;
     }
-    b.onclick=()=>{WATER=i<WATER?i:i+1;S(Sd('water'),WATER);buildWaterGrid();}
+    b.onclick=()=>{WATER=i<WATER?i:i+1;S(Sd('water'),WATER);buildWaterGrid();updateDailyScore();calcBevelScores();}
     g.appendChild(b);
   }
   const L=(WATER*0.25).toFixed(2);
@@ -3324,7 +3324,7 @@ function buildExCard(ex,i,day,container,isCircuit){
           <span class="rpe-val" id="rpev-${day}-${i}-${s}">${savedRpe}</span>
           <span class="rpe-desc" id="rped-${day}-${i}-${s}">${rpeDescriptions[savedRpe]||''}</span>
         </div>
-        ${orm>0?`<div class="orm-chip">Est. 1RM: ${orm} kg</div>`:''}
+        ${orm>0?`<div class="orm-chip" id="orm-${day}-${i}-${s}">Est. 1RM: ${orm} kg</div>`:`<div class="orm-chip" id="orm-${day}-${i}-${s}" style="display:none"></div>`}
       </div>`;
     }
   }
@@ -3397,24 +3397,35 @@ function toggleExCard(day,i){
 }
 
 function saveSet(day,i,s){
-  const w=document.getElementById(`si-w-${day}-${i}-${s}`).value;
-  const r=document.getElementById(`si-r-${day}-${i}-${s}`).value;
+  const wEl=document.getElementById(`si-w-${day}-${i}-${s}`);
+  const rEl=document.getElementById(`si-r-${day}-${i}-${s}`);
+  const w=wEl?wEl.value:'';
+  const r=rEl?rEl.value:'';
   const sk=`${day}_${i}_${s}${TODAY_KEY}`;
   const prev=WORKOUT_SETS[sk]||{done:false};
-  WORKOUT_SETS[sk]={reps:r||EX[day]?.[i]?.reps,weight:w,done:prev.done};
+  // Preserve all existing fields (especially rpe) — only update weight and reps
+  const plan=getActivePlan(day);
+  WORKOUT_SETS[sk]={...prev, reps:r||plan[i]?.reps||'', weight:w};
   S(Sd('workout_sets'),WORKOUT_SETS);
+  // Show 1RM estimate if weight+reps filled
+  if(w&&r){
+    const orm=Math.round(parseFloat(w)*(1+parseInt(r)/30));
+    const ormEl=document.getElementById(`orm-${day}-${i}-${s}`);
+    if(ormEl){ormEl.textContent='Est. 1RM: '+orm+' kg';ormEl.style.display='inline-block';}
+  }
 }
 
 function toggleSetDone(day,i,s,totalSets,restSec){
   const sk=`${day}_${i}_${s}${TODAY_KEY}`;
-  // safely read inputs — noWeight exercises don't have si-w-* element
   const wEl=document.getElementById(`si-w-${day}-${i}-${s}`);
   const rEl=document.getElementById(`si-r-${day}-${i}-${s}`);
   const w=wEl?wEl.value:'';
   const r=rEl?rEl.value:'';
   const prev=WORKOUT_SETS[sk]||{done:false};
   const nowDone=!prev.done;
-  WORKOUT_SETS[sk]={reps:r||EX[day]?.[i]?.reps,weight:w,done:nowDone};
+  const plan=getActivePlan(day);
+  // Spread prev to preserve ALL fields especially rpe — only update what changed
+  WORKOUT_SETS[sk]={...prev, reps:r||plan[i]?.reps||prev.reps||'', weight:w||prev.weight||'', done:nowDone};
   S(Sd('workout_sets'),WORKOUT_SETS);
 
   // update UI
